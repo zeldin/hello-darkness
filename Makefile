@@ -56,6 +56,7 @@ SRC += main.c
 SRC += dma.c
 SRC += tim.c
 SRC += spi.c
+SRC += led.c
 SRC += usb.c
 
 SRC += stm32f4xx_hal.c \
