@@ -54,6 +54,7 @@ SRC = startup_stm32f401xc.s system_stm32f4xx.c stm32f4xx_it.c
 #user source files
 SRC += main.c
 SRC += tim.c
+SRC += usb.c
 
 SRC += stm32f4xx_hal.c \
  stm32f4xx_hal_adc.c  \
@@ -75,7 +76,9 @@ SRC += stm32f4xx_hal.c \
  stm32f4xx_hal_tim.c \
  stm32f4xx_hal_tim_ex.c \
  stm32f4xx_hal_cortex.c \
- stm32f4xx_hal_pcd.c
+ stm32f4xx_hal_pcd.c \
+ stm32f4xx_hal_pcd_ex.c \
+ stm32f4xx_ll_usb.c
 
 #object files (with build dir --> $(OBJDIR)/name.o)
 OBJS = $(addprefix $(OBJDIR)/,$(subst .c,.o,$(subst .s,.o,$(SRC))))
