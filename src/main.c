@@ -24,7 +24,8 @@ static const uint8_t KeyCodes[9][14] = {
 	{ 0xf3, 0x00, 0xf2, 0x00, 0x55, 0x56, 0x57, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x58 },
 };
 
-static uint8_t HIDReport[8];
+static uint8_t HIDReport0[8];
+static uint8_t HIDReport1[8];
 static bool HIDReportOverflow;
 
 /**
@@ -212,10 +213,10 @@ static bool AddKeyToReport(uint8_t kc)
 {
 	unsigned i;
 	for (i=2; i<8; i++) {
-		if (HIDReport[i] == kc)
+		if (HIDReport0[i] == kc)
 			return true;
-		else if(HIDReport[i] == 0) {
-			HIDReport[i] = kc;
+		else if(HIDReport0[i] == 0) {
+			HIDReport0[i] = kc;
 			return true;
 		}
 	}
@@ -226,16 +227,16 @@ static bool RemoveKeyFromReport(uint8_t kc)
 {
 	unsigned i;
 	for (i=2; i<8; i++) {
-		if (HIDReport[i] == kc) {
+		if (HIDReport0[i] == kc) {
 			while (i < 7) {
-				if (!(HIDReport[i] = HIDReport[i+1]))
+				if (!(HIDReport0[i] = HIDReport0[i+1]))
 					break;
 				i++;
 			}
-			HIDReport[i] = 0;
+			HIDReport0[i] = 0;
 			return true;
 		}
-		else if(HIDReport[i] == 0)
+		else if(HIDReport0[i] == 0)
 			break;
 	}
 	return false;
@@ -252,7 +253,9 @@ static void KeyDown(unsigned row, unsigned column)
 			if (!AddKeyToReport(kc))
 				HIDReportOverflow = true;
 		} else if (kc < 0xe8) {
-			HIDReport[0] |= 1 << (kc & 7);
+			HIDReport0[0] |= 1 << (kc & 7);
+		} else if (kc >= 0xf0 && kc < 0xf8) {
+			HIDReport1[0] |= 1 << (kc & 7);
 		}
 	}
 }
@@ -268,7 +271,9 @@ static void KeyUp(unsigned row, unsigned column)
 			if (RemoveKeyFromReport(kc))
 				HIDReportOverflow = false;
 		} else if (kc < 0xe8) {
-			HIDReport[0] &= ~(1 << (kc & 7));
+			HIDReport0[0] &= ~(1 << (kc & 7));
+		} else if (kc >= 0xf0 && kc < 0xf8) {
+			HIDReport1[0] &= ~(1 << (kc & 7));
 		}
 	}
 }
@@ -297,10 +302,11 @@ void ADC_MaskCallback(uint8_t column, uint16_t mask)
 	if (column == 13) {
 		if (HIDReportOverflow) {
 			static uint8_t overflow_report[8] = "\0\0\1\1\1\1\1\1";
-			overflow_report[0] = HIDReport[0];
-			USB_HIDInReportSubmit(overflow_report);
+			overflow_report[0] = HIDReport0[0];
+			USB_HIDInReportSubmit(0, overflow_report);
 		} else
-			USB_HIDInReportSubmit(HIDReport);
+			USB_HIDInReportSubmit(0, HIDReport0);
+		USB_HIDInReportSubmit(1, HIDReport1);
 	}
 }
 

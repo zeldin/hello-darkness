@@ -130,8 +130,25 @@ static const uint8_t USB_ReportDescriptor0[] = {
 	0xC0,              // End Collection
 };
 
-static const uint8_t * const USB_ReportDescriptors[] = { USB_ReportDescriptor0 };
-static const uint8_t USB_ReportDescriptorSizes[] = { sizeof(USB_ReportDescriptor0) };
+static const uint8_t USB_ReportDescriptor1[] = {
+	0x05, 0x0C,        // Usage Page (Consumer)
+	0x09, 0x01,        // Usage (Consumer Control)
+	0xA1, 0x01,        // Collection (Application)
+	0x09, 0x35,        //   Usage (Illumination)
+	0x09, 0xCD,        //   Usage (Play/Pause)
+	0x09, 0xB5,        //   Usage (Scan Next Track)
+	0x09, 0x40,        //   Usage (Menu)
+	0x75, 0x01,        //   Report Size (1)
+	0x95, 0x04,        //   Report Count (4)
+	0x81, 0x02,        //   Input (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position)
+	0x75, 0x1C,        //   Report Size (28)
+	0x95, 0x01,        //   Report Count (1)
+	0x81, 0x01,        //   Input (Const,Array,Abs,No Wrap,Linear,Preferred State,No Null Position)
+	0xC0,              // End Collection
+};
+
+static const uint8_t * const USB_ReportDescriptors[] = { USB_ReportDescriptor0 , USB_ReportDescriptor1 };
+static const uint8_t USB_ReportDescriptorSizes[] = { sizeof(USB_ReportDescriptor0), sizeof(USB_ReportDescriptor1) };
 
 typedef struct {
 	uint8_t bLength;
@@ -160,6 +177,9 @@ typedef struct {
 	USB_InterfaceDescriptorTypeDef interface0;
 	USB_HIDDescriptorTypeDef hid0;
 	USB_EndpointDescriptorTypeDef ep1;
+	USB_InterfaceDescriptorTypeDef interface1;
+	USB_HIDDescriptorTypeDef hid1;
+	USB_EndpointDescriptorTypeDef ep2;
 }  __attribute__((packed)) USB_CompositeDescriptorsTypeDef;
 
 static const USB_CompositeDescriptorsTypeDef USB_ConfigurationDescriptorStruct = {
@@ -167,7 +187,7 @@ static const USB_CompositeDescriptorsTypeDef USB_ConfigurationDescriptorStruct =
 		sizeof(USB_ConfigurationDescriptorTypeDef),
 		2,
 		sizeof(USB_CompositeDescriptorsTypeDef),
-		1,  /* One interface */
+		2,  /* Two interfaces */
 		1,
 		2,
 		0xa0,
@@ -200,6 +220,34 @@ static const USB_CompositeDescriptorsTypeDef USB_ConfigurationDescriptorStruct =
 		0x03, /* Interrupt */
 		8,
 		8
+	},
+	{
+		/* Interface 1 */
+		sizeof(USB_InterfaceDescriptorTypeDef),
+		4,
+		1,
+		0,
+		1,       /* One endpoint */
+		3, 0, 0, /* HID */
+		3,
+	},
+	{
+		sizeof(USB_HIDDescriptorTypeDef),
+		0x21,
+		0x0111,
+		0,
+		1,
+		0x22,
+		sizeof(USB_ReportDescriptor1),
+	},
+	{
+		/* EP2 */
+		sizeof(USB_EndpointDescriptorTypeDef),
+		5,
+		0x82,
+		0x03, /* Interrupt */
+		4,
+		16
 	}
 };
 
@@ -214,10 +262,12 @@ typedef struct {
 		REPORT_IDLE,
 		REPORT_BUSY,
 		REPORT_PENDING,
-	} ReportState;
+	} ReportState[2];
 	uint16_t EP0_DataInLeft;
-	uint8_t Config, IdleDuration, Protocol;
-	uint8_t HIDReportIn[8];
+	uint8_t Config;
+	uint8_t Protocol[2];
+	uint8_t IdleDuration[2];
+	uint8_t HIDReportIn[2][8];
 	uint8_t HIDReportOut[8];
 } USB_StateTypeDef;
 
@@ -304,12 +354,17 @@ static bool USB_HandleStdDevSetup(PCD_HandleTypeDef * hpcd)
 			if (req->wValue != state->Config) {
 				state->Config = req->wValue;
 				if (state->Config) {
-					HAL_PCD_EP_Open(hpcd, 0x81, sizeof(state->HIDReportIn), EP_TYPE_INTR);
-					state->ReportState = REPORT_BUSY;
-					HAL_PCD_EP_Transmit(&PCD_HandleStruct, 1, state->HIDReportIn, sizeof(state->HIDReportIn));
+					HAL_PCD_EP_Open(hpcd, 0x81, sizeof(state->HIDReportIn[0]), EP_TYPE_INTR);
+					HAL_PCD_EP_Open(hpcd, 0x82, 4, EP_TYPE_INTR);
+					state->ReportState[0] = REPORT_BUSY;
+					state->ReportState[1] = REPORT_BUSY;
+					HAL_PCD_EP_Transmit(hpcd, 1, state->HIDReportIn[0], hpcd->IN_ep[1].maxpacket);
+					HAL_PCD_EP_Transmit(hpcd, 2, state->HIDReportIn[1], hpcd->IN_ep[2].maxpacket);
 				} else {
-					state->ReportState = REPORT_PENDING;
+					state->ReportState[0] = REPORT_PENDING;
+					state->ReportState[1] = REPORT_PENDING;
 					HAL_PCD_EP_Close(hpcd, 0x81);
+					HAL_PCD_EP_Close(hpcd, 0x82);
 				}
 			}
 			USB_CtlIn(hpcd, NULL, 0);
@@ -326,39 +381,40 @@ static bool USB_HandleClsIfcSetup(PCD_HandleTypeDef * hpcd)
 	const USB_SetupPacketTypeDef *req = (const USB_SetupPacketTypeDef *)hpcd->Setup;
 	switch (req->bRequest) {
 	case 1: /* GET_REPORT */
-		if (req->wValue == 0x0100 && req->wLength <= sizeof(state->HIDReportIn)) {
-			USB_CtlIn(hpcd, state->HIDReportIn, sizeof(state->HIDReportIn));
+		if (req->wValue == 0x0100 && req->wLength <= sizeof(state->HIDReportIn[req->wIndex])) {
+			USB_CtlIn(hpcd, state->HIDReportIn[req->wIndex], sizeof(state->HIDReportIn[req->wIndex]));
 			return true;
 		}
 		break;
 	case 2: /* GET_IDLE */
 		if (req->wLength == 1 && req->wValue == 0) {
-			USB_CtlIn(hpcd, &state->IdleDuration, sizeof(state->IdleDuration));
+			USB_CtlIn(hpcd, &state->IdleDuration[req->wIndex], sizeof(state->IdleDuration[req->wIndex]));
 			return true;
 		}
 		break;
 	case 3: /* GET_PROTOCOL */
-		if (req->wLength == 1 && req->wValue == 0 && req->wIndex == 0) {
-			USB_CtlIn(hpcd, &state->Protocol, sizeof(state->Protocol));
+		if (req->wLength == 1 && req->wValue == 0) {
+			USB_CtlIn(hpcd, &state->Protocol[req->wIndex], sizeof(state->Protocol[req->wIndex]));
 			return true;
 		}
 		break;
 	case 9: /* SET_REPORT */
-		if (req->wValue == 0x0200 && req->wLength <= sizeof(state->HIDReportOut)) {
+		if (req->wValue == 0x0200 && req->wIndex == 0 && req->wLength <= sizeof(state->HIDReportOut)) {
 			USB_CtlOut(hpcd, state->HIDReportOut, sizeof(state->HIDReportOut));
 			return true;
 		}
 		break;
 	case 10: /* SET_IDLE */
 		if (req->wLength == 0 && !(req->wValue & 0xff)) {
-			state->IdleDuration = req->wValue >> 8;
+			state->IdleDuration[req->wIndex] = req->wValue >> 8;
 			USB_CtlIn(hpcd, NULL, 0);
 			return true;
 		}
 		break;
 	case 11: /* SET_PROTOCOL */
-		if (req->wLength == 0 && req->wValue < 2 && req->wIndex == 0) {
-			state->Protocol = req->wValue;
+		if (req->wLength == 0 && req->wValue < 2 &&
+		    (req->wIndex == 0 || req->wValue == 1)) {
+			state->Protocol[req->wIndex] = req->wValue;
 			USB_CtlIn(hpcd, NULL, 0);
 			return true;
 		}
@@ -397,11 +453,11 @@ void HAL_PCD_SetupStageCallback(PCD_HandleTypeDef * hpcd)
 			return;
 		break;
 	case (0<<5)|1:
-		if (state->Config && req->wIndex == 0 && USB_HandleStdIfcSetup(hpcd))
+		if (state->Config && req->wIndex < 2 && USB_HandleStdIfcSetup(hpcd))
 			return;
 		break;
 	case (1<<5)|1:
-		if (state->Config && req->wIndex == 0 && USB_HandleClsIfcSetup(hpcd))
+		if (state->Config && req->wIndex < 2 && USB_HandleClsIfcSetup(hpcd))
 			return;
 		break;
 	}
@@ -451,18 +507,18 @@ void HAL_PCD_DataInStageCallback(PCD_HandleTypeDef * hpcd, uint8_t epnum)
 			HAL_PCD_EP_SetStall(hpcd, 0x80);
 			HAL_PCD_EP_Receive(hpcd, 0, NULL, 0);
 		}
-	} else if(epnum == 1 && state->ReportState != REPORT_IDLE) {
+	} else if(epnum < 3 && state->ReportState[epnum-1] != REPORT_IDLE) {
 		bool send_pkt = false;
 		uint32_t primask_bit = __get_PRIMASK();
 		__disable_irq();
-		if (state->ReportState == REPORT_PENDING) {
-			state->ReportState = REPORT_BUSY;
+		if (state->ReportState[epnum-1] == REPORT_PENDING) {
+			state->ReportState[epnum-1] = REPORT_BUSY;
 			send_pkt = true;
-		} else if (state->ReportState == REPORT_BUSY)
-			state->ReportState = REPORT_IDLE;
+		} else if (state->ReportState[epnum-1] == REPORT_BUSY)
+			state->ReportState[epnum-1] = REPORT_IDLE;
 		__set_PRIMASK(primask_bit);
 		if (send_pkt) {
-			HAL_PCD_EP_Transmit(&PCD_HandleStruct, 1, state->HIDReportIn, sizeof(state->HIDReportIn));
+			HAL_PCD_EP_Transmit(&PCD_HandleStruct, epnum, state->HIDReportIn[epnum-1], hpcd->IN_ep[epnum].maxpacket);
 		}
 	}
 }
@@ -477,10 +533,13 @@ void HAL_PCD_ResetCallback(PCD_HandleTypeDef * hpcd)
 	USB_StateTypeDef *state = hpcd->pData;
 
 	state->Config = 0;
-	state->IdleDuration = 2;
-	state->Protocol = 1;
+	state->IdleDuration[0] = 2;
+	state->IdleDuration[1] = 0;
+	state->Protocol[0] = 1;
+	state->Protocol[1] = 1;
 	state->EP0_Mode = MODE_NONE;
-	state->ReportState = REPORT_PENDING;
+	state->ReportState[0] = REPORT_PENDING;
+	state->ReportState[1] = REPORT_PENDING;
 	HAL_PCD_EP_Open(hpcd, 0x00, 64, EP_TYPE_CTRL);
 	HAL_PCD_EP_Open(hpcd, 0x80, 64, EP_TYPE_CTRL);
 }
@@ -528,27 +587,28 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef * hpcd)
 	}
 }
 
-void USB_HIDInReportSubmit(const uint8_t *report)
+void USB_HIDInReportSubmit(unsigned channel, const uint8_t *report)
 {
 	USB_StateTypeDef *state = &USB_StateStruct;
 
-	if (!memcmp(state->HIDReportIn, report, sizeof(state->HIDReportIn)))
+	if (channel > 1 ||
+	    !memcmp(state->HIDReportIn[channel], report, sizeof(state->HIDReportIn[channel])))
 		return;
-	memcpy(state->HIDReportIn, report, sizeof(state->HIDReportIn));
+	memcpy(state->HIDReportIn[channel], report, sizeof(state->HIDReportIn[channel]));
 	bool send_pkt = false;
 	uint32_t primask_bit = __get_PRIMASK();
 	__disable_irq();
 	if (state->Config) {
-		if (state->ReportState == REPORT_BUSY)
-			state->ReportState = REPORT_PENDING;
-		else if(state->ReportState == REPORT_IDLE) {
-			state->ReportState = REPORT_BUSY;
+		if (state->ReportState[channel] == REPORT_BUSY)
+			state->ReportState[channel] = REPORT_PENDING;
+		else if(state->ReportState[channel] == REPORT_IDLE) {
+			state->ReportState[channel] = REPORT_BUSY;
 			send_pkt = true;
 		}
 	}
 	__set_PRIMASK(primask_bit);
 	if (send_pkt) {
-		HAL_PCD_EP_Transmit(&PCD_HandleStruct, 1, state->HIDReportIn, sizeof(state->HIDReportIn));
+		HAL_PCD_EP_Transmit(&PCD_HandleStruct, channel+1, state->HIDReportIn[channel], PCD_HandleStruct.IN_ep[channel+1].maxpacket);
 	}
 }
 
@@ -572,7 +632,8 @@ void USB_Setup_USB(void)
 	/* configure EPs FIFOs */
 	HAL_PCDEx_SetRxFiFo(&PCD_HandleStruct, 0x80);
 	HAL_PCDEx_SetTxFiFo(&PCD_HandleStruct, 0, 0x40);
-	HAL_PCDEx_SetTxFiFo(&PCD_HandleStruct, 1, 0x80);
+	HAL_PCDEx_SetTxFiFo(&PCD_HandleStruct, 1, 0x40);
+	HAL_PCDEx_SetTxFiFo(&PCD_HandleStruct, 2, 0x40);
 
 	CHECK_HAL_RESULT(HAL_PCD_Start(&PCD_HandleStruct));
 }
