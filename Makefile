@@ -1,5 +1,5 @@
 # name of the project, the binaries will be generated with this name
-PROJ_NAME = das
+PROJ_NAME = darkness
 
 
 #compiler
