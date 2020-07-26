@@ -60,6 +60,8 @@ SRC += spi.c
 SRC += led.c
 SRC += key.c
 SRC += usb.c
+SRC += effect.c
+SRC += effect_rainbow.c
 
 SRC += stm32f4xx_hal.c \
  stm32f4xx_hal_adc.c  \

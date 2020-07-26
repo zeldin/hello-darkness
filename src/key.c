@@ -22,6 +22,7 @@ static const uint8_t KeyCodes[KEY_CODE_MAX+1] = {
 static uint8_t HIDReport0[8];
 static uint8_t HIDReport1[8];
 static bool HIDReportOverflow;
+static uint8_t ToggleA, ToggleB;
 
 static bool AddKeyToReport(uint8_t kc)
 {
@@ -96,6 +97,9 @@ void ADC_MaskCallback(uint8_t column, uint16_t mask)
 {
 	static uint16_t LastKeyMask[14];
 
+	if (mask)
+			ToggleB = ~ToggleA;
+
 	mask ^= LastKeyMask[column];
 
 	if (mask) {
@@ -127,6 +131,8 @@ void ADC_MaskCallback(uint8_t column, uint16_t mask)
 
 void TIM_EncoderCallback(uint8_t value)
 {
+	ToggleB = ~ToggleA;
+
 	unsigned hue = value * 6;
 	unsigned r = 0, g = 0, b = 0;
 	unsigned x = hue & 0x100? ~hue & 0xff : hue & 0xff;
@@ -175,4 +181,12 @@ void USB_HIDOutReportCallback(const uint8_t *report)
 			LED_Set_LED_RGB(LED_id[i], 0, 0, 0);
 		mask >>= 1;
 	}
+}
+
+bool KEY_CheckRecentKeypress(void)
+{
+	if (ToggleA == ToggleB)
+		return false;
+	ToggleA = ToggleB;
+	return true;
 }

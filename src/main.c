@@ -10,6 +10,10 @@
 #include "led.h"
 #include "key.h"
 #include "usb.h"
+#include "effect.h"
+
+
+#define BLANKER_DELAY_MS 600000
 
 
 /**
@@ -210,17 +214,48 @@ int main()
 	SPI_Setup_SPI2();
 	TIM_Setup_TIM9();
 
+	uint32_t previous_tick = HAL_GetTick();
+	enum {
+		MODE_NORMAL,
+		MODE_BLANKER
+	} mode = MODE_NORMAL;
+
 	ADC_Start(0);
 	LED_Start();
 	TIM_Start_Encoder();
 
-	/* Blink the LED on the brighness adjustment key */
 	while (1)
 	{
-		HAL_Delay(200);
-		LED_Set_LED_RGB(0x8d, 0x2800, 0x2800, 0x2800);
-		HAL_Delay(200);
-		LED_Set_LED_RGB(0x8d, 0, 0, 0);
+		uint32_t now = HAL_GetTick();
+		int32_t delay = now - previous_tick;
+		bool recent_keypress = KEY_CheckRecentKeypress();
+		switch (mode) {
+		case MODE_NORMAL:
+			if (recent_keypress)
+				previous_tick = now;
+			else if (delay >= BLANKER_DELAY_MS) {
+				mode = MODE_BLANKER;
+				continue;
+			}
+			break;
+		case MODE_BLANKER:
+			if (recent_keypress) {
+				mode = MODE_NORMAL;
+				previous_tick = now;
+				LED_ClearEffect();
+				continue;
+			} else if (delay) {
+				void *buf = LED_GetEffectBuffer();
+				if (buf) {
+					previous_tick = now;
+					EFFECT_Rainbow(buf, delay);
+					LED_CommitEffectBuffer(buf);
+					continue;
+				}
+			}
+			break;
+		}
+		__WFI();
 	}
 
 	return 0;

@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdbool.h>
 #include <string.h>
 #include <stm32f4xx.h>
 #include <stm32f4xx_ll_gpio.h>
@@ -14,10 +15,12 @@
 
 static uint16_t LED_Mode;
 static uint16_t LED_Update_Page;
-static uint16_t LED_Update_Buffer[3][256];
+static uint16_t LED_Update_Buffer[4][3][256];
 static uint16_t LED_Update_Scratch_Readback[256];
 static uint16_t LED_Status_Readback[17];
 static uint16_t LED_Start_Buffer[16];
+static uint8_t LED_Current_Buffer;
+static uint8_t LED_Next_Buffer;
 
 
 static const uint8_t LED_RGB_Map[LED_ID_MAX+1] = {
@@ -58,12 +61,21 @@ static const uint8_t LED_Key_MultiMap[] = {
 void LED_IRQHandler(void)
 {
 	if (LED_Mode == 0) {
-		LED_Update_Buffer[0][0] = 0xa035;
 		HAL_SPI_TransmitReceive_DMA(&SPI_HandleStruct_SPI2,
-					    (uint8_t *)LED_Update_Buffer[LED_Update_Page],
+					    (uint8_t *)LED_Update_Buffer[LED_Current_Buffer][LED_Update_Page],
 					    (uint8_t *)LED_Update_Scratch_Readback, 256);
-		if (++LED_Update_Page > 2)
+		if (++LED_Update_Page > 2) {
 			LED_Update_Page = 0;
+			if (!LED_Next_Buffer)
+				LED_Current_Buffer = 0;
+			else {
+				uint8_t flip = LED_Current_Buffer + 1;
+				if (flip > 3)
+					flip = 1;
+				if ((LED_Next_Buffer & (1<<flip)))
+					LED_Current_Buffer = flip;
+			}
+		}
 	} else {
 		int pulse_count, delay;
 		uint16_t spi_word;
@@ -194,6 +206,33 @@ static void LED_Start_TIM1(void)
 	}
 }
 
+static void LED_SetControlWords(uint16_t (*buf)[3][256])
+{
+	(*buf)[0][0]   = 0xa035;
+	(*buf)[0][16]  = 0xa115;
+	(*buf)[0][32]  = 0xa225;
+	(*buf)[0][48]  = 0xa335;
+	(*buf)[0][64]  = 0xa445;
+	(*buf)[0][80]  = 0xa555;
+	(*buf)[0][96]  = 0xa665;
+	(*buf)[0][112] = 0xa775;
+	(*buf)[0][128] = 0xa885;
+	(*buf)[0][144] = 0xa995;
+	(*buf)[0][160] = 0xa0a5;
+	(*buf)[0][176] = 0xa0b5;
+	(*buf)[0][192] = 0xa0c5;
+	(*buf)[0][208] = 0xa0d5;
+	(*buf)[0][224] = 0x00e6;
+	(*buf)[0][240] = 0x0006;
+
+	(*buf)[1][224] = 0x00e5;
+	(*buf)[1][240] = 0x0005;
+
+	(*buf)[2][224] = 0x00e3;
+	(*buf)[2][240] = 0x0003;
+
+}
+
 static void LED_Set_Start_Packet(uint16_t value)
 {
 	uint16_t cword = (value << 4) | 0x0008;
@@ -287,29 +326,11 @@ void LED_Start(void)
 	LED_Set_Start_Packet(7);
 
 	/* Set control words for update buffer */
+	LED_SetControlWords(&LED_Update_Buffer[0]);
+	LED_SetControlWords(&LED_Update_Buffer[1]);
+	LED_SetControlWords(&LED_Update_Buffer[2]);
+	LED_SetControlWords(&LED_Update_Buffer[3]);
 
-	LED_Update_Buffer[0][0]   = 0xa005;
-	LED_Update_Buffer[0][16]  = 0xa115;
-	LED_Update_Buffer[0][32]  = 0xa225;
-	LED_Update_Buffer[0][48]  = 0xa335;
-	LED_Update_Buffer[0][64]  = 0xa445;
-	LED_Update_Buffer[0][80]  = 0xa555;
-	LED_Update_Buffer[0][96]  = 0xa665;
-	LED_Update_Buffer[0][112] = 0xa775;
-	LED_Update_Buffer[0][128] = 0xa885;
-	LED_Update_Buffer[0][144] = 0xa995;
-	LED_Update_Buffer[0][160] = 0xa0a5;
-	LED_Update_Buffer[0][176] = 0xa0b5;
-	LED_Update_Buffer[0][192] = 0xa0c5;
-	LED_Update_Buffer[0][208] = 0xa0d5;
-	LED_Update_Buffer[0][224] = 0x00e6;
-	LED_Update_Buffer[0][240] = 0x0006;
-
-	LED_Update_Buffer[1][224] = 0x00e5;
-	LED_Update_Buffer[1][240] = 0x0005;
-
-	LED_Update_Buffer[2][224] = 0x00e3;
-	LED_Update_Buffer[2][240] = 0x0003;
 
 	/* Enable interrupt */
 
@@ -322,9 +343,9 @@ void LED_Set_LED(uint8_t id, uint16_t c0, uint16_t c1, uint16_t c2)
 {
 	if (id <= LED_ID_MAX) {
 		unsigned offs = ((id&0xfu) << 4) + (id >> 4) + 7;
-		LED_Update_Buffer[0][offs] = c0;
-		LED_Update_Buffer[1][offs] = c1;
-		LED_Update_Buffer[2][offs] = c2;
+		LED_Update_Buffer[0][0][offs] = c0;
+		LED_Update_Buffer[0][1][offs] = c1;
+		LED_Update_Buffer[0][2][offs] = c2;
 	}
 }
 
@@ -334,19 +355,19 @@ void LED_Set_LED_RGB(uint8_t id, uint16_t r, uint16_t g, uint16_t b)
 		unsigned offs = ((id&0xfu) << 4) + (id >> 4) + 7;
 		switch(LED_RGB_Map[id]) {
 		case 0:
-			LED_Update_Buffer[0][offs] = r;
-			LED_Update_Buffer[1][offs] = g;
-			LED_Update_Buffer[2][offs] = b;
+			LED_Update_Buffer[0][0][offs] = r;
+			LED_Update_Buffer[0][1][offs] = g;
+			LED_Update_Buffer[0][2][offs] = b;
 			break;
 		case 1:
-			LED_Update_Buffer[0][offs] = b;
-			LED_Update_Buffer[1][offs] = r;
-			LED_Update_Buffer[2][offs] = g;
+			LED_Update_Buffer[0][0][offs] = b;
+			LED_Update_Buffer[0][1][offs] = r;
+			LED_Update_Buffer[0][2][offs] = g;
 			break;
 		case 2:
-			LED_Update_Buffer[0][offs] = g;
-			LED_Update_Buffer[1][offs] = b;
-			LED_Update_Buffer[2][offs] = r;
+			LED_Update_Buffer[0][0][offs] = g;
+			LED_Update_Buffer[0][1][offs] = b;
+			LED_Update_Buffer[0][2][offs] = r;
 			break;
 		}
 	}
@@ -363,4 +384,86 @@ void LED_Set_Key_RGB(uint8_t kc, uint16_t r, uint16_t g, uint16_t b)
 		} else
 			LED_Set_LED_RGB(pos, r, g, b);
 	}
+}
+
+/* Note: rgb points to 16 red values, followed by 16 green values, followed by 16 blue values */
+void LED_Set_ColumnEffect(void *buffer, unsigned column, const uint8_t *rgb)
+{
+	if (buffer == NULL || column > LED_COLUMN_MAX || rgb == NULL)
+		return;
+	uint16_t (*buf)[3][256] = buffer;
+	const uint8_t *map = &LED_RGB_Map[column << 4];
+	unsigned offs = column + 7;
+	do {
+		uint16_t b = rgb[32] << 5;
+		uint16_t g = rgb[16] << 5;
+		uint16_t r = *rgb++  << 5;
+		switch(*map++) {
+		case 0:
+			(*buf)[0][offs] = r;
+			(*buf)[1][offs] = g;
+			(*buf)[2][offs] = b;
+			break;
+		case 1:
+			(*buf)[0][offs] = b;
+			(*buf)[1][offs] = r;
+			(*buf)[2][offs] = g;
+			break;
+		case 2:
+			(*buf)[0][offs] = g;
+			(*buf)[1][offs] = b;
+			(*buf)[2][offs] = r;
+			break;
+		}
+		offs += 16;
+	} while(offs < 256);
+}
+
+void *LED_GetEffectBuffer(void)
+{
+	unsigned nb = LED_Next_Buffer;
+	unsigned cb = LED_Current_Buffer;
+	
+	if (cb && !nb)
+		/* Wait for previous effect to clear out */
+		return NULL;
+
+	if (!cb && nb == 0xe)
+		/* Wait for effect to start before
+		   reusing buffers*/
+		return NULL;
+
+	/* Clear used flag of current and preceeding;
+	   we guard explicitly against reusing current
+	   below so it's sage to mark it as "unused". */
+	unsigned sb = cb;
+	while ((nb & (1<<sb))) {
+		nb &= ~(1<<sb);
+		if (!--sb)
+			sb = 3;
+	}
+	LED_Next_Buffer = nb;
+
+	/* Find first unused buffer after current */
+	sb = cb;
+	do {
+		if (++sb > 3)
+			sb = 1;
+	} while ((nb & (1<<sb)));
+
+	/* If only current is "unused", abort */
+	if (sb == cb)
+		return NULL;
+
+	return LED_Update_Buffer[sb];
+}
+
+void LED_CommitEffectBuffer(void *buf)
+{
+	LED_Next_Buffer |= 1 << (((uint16_t (*)[3][256])buf) - &LED_Update_Buffer[0]);
+}
+
+void LED_ClearEffect(void)
+{
+	LED_Next_Buffer = 0;
 }
