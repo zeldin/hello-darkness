@@ -58,6 +58,7 @@ SRC += adc.c
 SRC += tim.c
 SRC += spi.c
 SRC += led.c
+SRC += key.c
 SRC += usb.c
 
 SRC += stm32f4xx_hal.c \

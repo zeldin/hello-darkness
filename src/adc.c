@@ -36,7 +36,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
   for (i=2; i<11; i++) {
     mask >>= 1;
     if (ADC_Readback_Buffer[i] < cutoff)
-      mask |= (1<<9);
+      mask |= (1<<8);
   }
   unsigned next_col = ADC_Column + 1;
   if (next_col >= 14)
