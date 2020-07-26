@@ -161,7 +161,7 @@ typedef struct {
 
 static const USB_StringDescriptorTypeDef USB_StringDescrLangIds = { 4, 3, { 0x0409 } };
 USB_STRING_DESCRIPTOR(USB_StringDescrManuf,      "DieFarbe");
-USB_STRING_DESCRIPTOR(USB_StringDescrProd,       "Hello World");
+USB_STRING_DESCRIPTOR(USB_StringDescrProd,       "Hello Darkness");
 USB_STRING_DESCRIPTOR(USB_StringDescrInterface,  "HID Device");
 
 static const void * const USB_StringDescriptors[] = {
