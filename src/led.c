@@ -21,6 +21,7 @@ static uint16_t LED_Status_Readback[17];
 static uint16_t LED_Start_Buffer[16];
 static uint8_t LED_Current_Buffer;
 static uint8_t LED_Next_Buffer;
+static uint8_t LED_Brightness = 32;
 
 
 static const uint8_t LED_RGB_Map[LED_ID_MAX+1] = {
@@ -339,41 +340,41 @@ void LED_Start(void)
 	HAL_Delay(10);
 }
 
-void LED_Set_LED(uint8_t id, uint16_t c0, uint16_t c1, uint16_t c2)
+void LED_Set_LED(uint8_t id, uint8_t c0, uint8_t c1, uint8_t c2)
 {
 	if (id <= LED_ID_MAX) {
 		unsigned offs = ((id&0xfu) << 4) + (id >> 4) + 7;
-		LED_Update_Buffer[0][0][offs] = c0;
-		LED_Update_Buffer[0][1][offs] = c1;
-		LED_Update_Buffer[0][2][offs] = c2;
+		LED_Update_Buffer[0][0][offs] = c0 * LED_Brightness;
+		LED_Update_Buffer[0][1][offs] = c1 * LED_Brightness;
+		LED_Update_Buffer[0][2][offs] = c2 * LED_Brightness;
 	}
 }
 
-void LED_Set_LED_RGB(uint8_t id, uint16_t r, uint16_t g, uint16_t b)
+void LED_Set_LED_RGB(uint8_t id, uint8_t r, uint8_t g, uint8_t b)
 {
 	if (id <= LED_ID_MAX) {
 		unsigned offs = ((id&0xfu) << 4) + (id >> 4) + 7;
 		switch(LED_RGB_Map[id]) {
 		case 0:
-			LED_Update_Buffer[0][0][offs] = r;
-			LED_Update_Buffer[0][1][offs] = g;
-			LED_Update_Buffer[0][2][offs] = b;
+			LED_Update_Buffer[0][0][offs] = r * LED_Brightness;
+			LED_Update_Buffer[0][1][offs] = g * LED_Brightness;
+			LED_Update_Buffer[0][2][offs] = b * LED_Brightness;
 			break;
 		case 1:
-			LED_Update_Buffer[0][0][offs] = b;
-			LED_Update_Buffer[0][1][offs] = r;
-			LED_Update_Buffer[0][2][offs] = g;
+			LED_Update_Buffer[0][0][offs] = b * LED_Brightness;
+			LED_Update_Buffer[0][1][offs] = r * LED_Brightness;
+			LED_Update_Buffer[0][2][offs] = g * LED_Brightness;
 			break;
 		case 2:
-			LED_Update_Buffer[0][0][offs] = g;
-			LED_Update_Buffer[0][1][offs] = b;
-			LED_Update_Buffer[0][2][offs] = r;
+			LED_Update_Buffer[0][0][offs] = g * LED_Brightness;
+			LED_Update_Buffer[0][1][offs] = b * LED_Brightness;
+			LED_Update_Buffer[0][2][offs] = r * LED_Brightness;
 			break;
 		}
 	}
 }
 
-void LED_Set_Key_RGB(uint8_t kc, uint16_t r, uint16_t g, uint16_t b)
+void LED_Set_Key_RGB(uint8_t kc, uint8_t r, uint8_t g, uint8_t b)
 {
 	if (kc <= KEY_CODE_MAX) {
 		uint8_t pos = LED_Key_Map[kc];
@@ -395,9 +396,9 @@ void LED_Set_ColumnEffect(void *buffer, unsigned column, const uint8_t *rgb)
 	const uint8_t *map = &LED_RGB_Map[column << 4];
 	unsigned offs = column + 7;
 	do {
-		uint16_t b = rgb[32] << 5;
-		uint16_t g = rgb[16] << 5;
-		uint16_t r = *rgb++  << 5;
+		uint16_t b = rgb[32] * LED_Brightness;
+		uint16_t g = rgb[16] * LED_Brightness;
+		uint16_t r = *rgb++  * LED_Brightness;
 		switch(*map++) {
 		case 0:
 			(*buf)[0][offs] = r;
@@ -466,4 +467,14 @@ void LED_CommitEffectBuffer(void *buf)
 void LED_ClearEffect(void)
 {
 	LED_Next_Buffer = 0;
+}
+
+void LED_AdjustBrightness(int delta)
+{
+	if (delta > 255 - LED_Brightness)
+		LED_Brightness = 255;
+	else if (delta < -(LED_Brightness - 25))
+		LED_Brightness = 25;
+	else
+		LED_Brightness += delta;
 }

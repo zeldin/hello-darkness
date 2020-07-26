@@ -217,7 +217,8 @@ int main()
 	uint32_t previous_tick = HAL_GetTick();
 	enum {
 		MODE_NORMAL,
-		MODE_BLANKER
+		MODE_BLANKER,
+		MODE_BRIGHTNESS
 	} mode = MODE_NORMAL;
 
 	ADC_Start(0);
@@ -231,7 +232,10 @@ int main()
 		bool recent_keypress = KEY_CheckRecentKeypress();
 		switch (mode) {
 		case MODE_NORMAL:
-			if (recent_keypress)
+			if (KEY_CheckKeyState(KEY_CODE_LIGHT)) {
+				mode = MODE_BRIGHTNESS;
+				continue;
+			} else if (recent_keypress)
 				previous_tick = now;
 			else if (delay >= BLANKER_DELAY_MS) {
 				mode = MODE_BLANKER;
@@ -249,6 +253,22 @@ int main()
 				if (buf) {
 					previous_tick = now;
 					EFFECT_Rainbow(buf, delay);
+					LED_CommitEffectBuffer(buf);
+					continue;
+				}
+			}
+			break;
+		case MODE_BRIGHTNESS:
+			if (!KEY_CheckKeyState(KEY_CODE_LIGHT)) {
+				mode = MODE_NORMAL;
+				previous_tick = now;
+				LED_ClearEffect();
+				continue;
+			} else if (delay) {
+				void *buf = LED_GetEffectBuffer();
+				if (buf) {
+					previous_tick = now;
+					EFFECT_Solid(buf, 0xff, 0xff, 0xff);
 					LED_CommitEffectBuffer(buf);
 					continue;
 				}

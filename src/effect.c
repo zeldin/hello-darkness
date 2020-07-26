@@ -47,3 +47,16 @@ const uint8_t *EFFECT_GetLedColumnYs(unsigned column)
 {
   return column <= LED_COLUMN_MAX? &LedY[column<<4] : NULL;
 }
+
+void EFFECT_Solid(void *buf, uint8_t r, uint8_t g, uint8_t b)
+{
+  unsigned column, row;
+  uint8_t rgb[16*3];
+  for (row = 0; row < 16; row++) {
+    rgb[row] = r;
+    rgb[row+16] = g;
+    rgb[row+32] = b;
+  }
+  for (column = 0; column <= LED_COLUMN_MAX; column ++)
+    LED_Set_ColumnEffect(buf, column, rgb);
+}
