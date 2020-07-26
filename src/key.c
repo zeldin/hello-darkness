@@ -141,6 +141,8 @@ void TIM_EncoderCallback(uint8_t value)
 
 	if (KEY_CheckKeyState(KEY_CODE_LIGHT))
 		LED_AdjustBrightness(delta * 2);
+	else
+		HIDReport1[2] += delta;
 }
 
 void USB_HIDOutReportCallback(const uint8_t *report)
