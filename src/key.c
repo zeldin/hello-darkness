@@ -4,6 +4,7 @@
 
 #include "error.h"
 #include "led.h"
+#include "effect.h"
 #include "key.h"
 #include "usb.h"
 
@@ -61,7 +62,7 @@ static bool RemoveKeyFromReport(uint8_t kc)
 static void KeyDown(uint8_t kc)
 {
 	if (kc <= KEY_CODE_MAX) {
-		LED_Set_Key_RGB(kc, 0xff, 0xff, 0xff);
+		LED_Do_Key_LEDs(kc, EFFECT_Set_LED_Gradient, NULL);
 		kc = KeyCodes[kc];
 		if (!kc)
 			;

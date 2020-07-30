@@ -387,6 +387,19 @@ void LED_Set_Key_RGB(uint8_t kc, uint8_t r, uint8_t g, uint8_t b)
 	}
 }
 
+void LED_Do_Key_LEDs(uint8_t kc, void (*func)(uint8_t id, void *context), void *context)
+{
+	if (kc <= KEY_CODE_MAX) {
+		uint8_t pos = LED_Key_Map[kc];
+		if (pos >= 0xc0) {
+			const uint8_t *p = &LED_Key_MultiMap[pos-0xc0];
+			while ((pos = *p++) != 0xff)
+				(*func)(pos, context);
+		} else
+			(*func)(pos, context);
+	}
+}
+
 /* Note: rgb points to 16 red values, followed by 16 green values, followed by 16 blue values */
 void LED_Set_ColumnEffect(void *buffer, unsigned column, const uint8_t *rgb)
 {

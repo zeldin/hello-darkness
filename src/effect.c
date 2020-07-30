@@ -60,3 +60,11 @@ void EFFECT_Solid(void *buf, uint8_t r, uint8_t g, uint8_t b)
   for (column = 0; column <= LED_COLUMN_MAX; column ++)
     LED_Set_ColumnEffect(buf, column, rgb);
 }
+
+void EFFECT_Set_LED_Gradient(uint8_t id, void *context)
+{
+  if (id <= LED_ID_MAX) {
+    uint8_t x = LedX[id], y = LedY[id];
+    LED_Set_LED_RGB(id, y, x, 255-x);
+  }
+}

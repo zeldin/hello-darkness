@@ -11,6 +11,7 @@ extern void LED_Start(void);
 extern void LED_Set_LED(uint8_t id, uint8_t c0, uint8_t c1, uint8_t c2);
 extern void LED_Set_LED_RGB(uint8_t id, uint8_t r, uint8_t g, uint8_t b);
 extern void LED_Set_Key_RGB(uint8_t kc, uint8_t r, uint8_t g, uint8_t b);
+extern void LED_Do_Key_LEDs(uint8_t kc, void (*func)(uint8_t id, void *context), void *context);
 extern void LED_Set_ColumnEffect(void *buffer, unsigned column, const uint8_t *rgb);
 extern void *LED_GetEffectBuffer(void);
 extern void LED_CommitEffectBuffer(void *buf);
