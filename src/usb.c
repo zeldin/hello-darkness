@@ -277,6 +277,7 @@ typedef struct {
 	uint8_t Config;
 	uint8_t Protocol[2];
 	uint8_t IdleDuration[2];
+	uint16_t IdleCount[2];
 	uint8_t HIDReportIn[2][8];
 	uint8_t HIDReportOut[8];
 } USB_StateTypeDef;
@@ -370,6 +371,8 @@ static bool USB_HandleStdDevSetup(PCD_HandleTypeDef * hpcd)
 					state->ReportState[1] = REPORT_BUSY;
 					HAL_PCD_EP_Transmit(hpcd, 1, state->HIDReportIn[0], hpcd->IN_ep[1].maxpacket);
 					HAL_PCD_EP_Transmit(hpcd, 2, state->HIDReportIn[1], hpcd->IN_ep[2].maxpacket);
+					state->IdleCount[0] = state->IdleDuration[0] << 2;
+					state->IdleCount[1] = state->IdleDuration[1] << 2;
 				} else {
 					state->ReportState[0] = REPORT_PENDING;
 					state->ReportState[1] = REPORT_PENDING;
@@ -416,7 +419,8 @@ static bool USB_HandleClsIfcSetup(PCD_HandleTypeDef * hpcd)
 		break;
 	case 10: /* SET_IDLE */
 		if (req->wLength == 0 && !(req->wValue & 0xff)) {
-			state->IdleDuration[req->wIndex] = req->wValue >> 8;
+			state->IdleCount[req->wIndex] =
+				(state->IdleDuration[req->wIndex] = req->wValue >> 8) << 2;
 			USB_CtlIn(hpcd, NULL, 0);
 			return true;
 		}
@@ -523,6 +527,7 @@ void HAL_PCD_DataInStageCallback(PCD_HandleTypeDef * hpcd, uint8_t epnum)
 		__disable_irq();
 		if (state->ReportState[epnum-1] == REPORT_PENDING) {
 			state->ReportState[epnum-1] = REPORT_BUSY;
+			state->IdleCount[epnum-1] = state->IdleDuration[epnum-1] << 2;
 			send_pkt = true;
 		} else if (state->ReportState[epnum-1] == REPORT_BUSY)
 			state->ReportState[epnum-1] = REPORT_IDLE;
@@ -531,6 +536,40 @@ void HAL_PCD_DataInStageCallback(PCD_HandleTypeDef * hpcd, uint8_t epnum)
 			HAL_PCD_EP_Transmit(&PCD_HandleStruct, epnum, state->HIDReportIn[epnum-1], hpcd->IN_ep[epnum].maxpacket);
 		}
 	}
+}
+
+/**
+  * @brief  USB Start Of Frame callback.
+  * @param  hpcd PCD handle
+  * @retval None
+  */
+void HAL_PCD_SOFCallback(PCD_HandleTypeDef *hpcd)
+{
+	USB_StateTypeDef *state = hpcd->pData;
+
+	if (!state->Config)
+		return;
+
+	int i;
+	for (i=0; i<2; i++)
+		if (state->IdleDuration[i]) {
+			if (state->IdleCount[i] > 1)
+				--state->IdleCount[i];
+			else {
+				bool send_pkt = false;
+				uint32_t primask_bit = __get_PRIMASK();
+				__disable_irq();
+				if(state->ReportState[i] == REPORT_IDLE) {
+					state->ReportState[i] = REPORT_BUSY;
+					state->IdleCount[i] = state->IdleDuration[i] << 2;
+					send_pkt = true;
+				}
+				__set_PRIMASK(primask_bit);
+				if (send_pkt) {
+					HAL_PCD_EP_Transmit(&PCD_HandleStruct, i+1, state->HIDReportIn[i], hpcd->IN_ep[i+1].maxpacket);
+				}
+			}
+		}
 }
 
 /**
@@ -545,6 +584,8 @@ void HAL_PCD_ResetCallback(PCD_HandleTypeDef * hpcd)
 	state->Config = 0;
 	state->IdleDuration[0] = 2;
 	state->IdleDuration[1] = 0;
+	state->IdleCount[0] = 8;
+	state->IdleCount[1] = 0;
 	state->Protocol[0] = 1;
 	state->Protocol[1] = 1;
 	state->EP0_Mode = MODE_NONE;
@@ -613,6 +654,7 @@ void USB_HIDInReportSubmit(unsigned channel, const uint8_t *report)
 			state->ReportState[channel] = REPORT_PENDING;
 		else if(state->ReportState[channel] == REPORT_IDLE) {
 			state->ReportState[channel] = REPORT_BUSY;
+			state->IdleCount[channel] = state->IdleDuration[channel] << 2;
 			send_pkt = true;
 		}
 	}
@@ -629,7 +671,7 @@ void USB_Setup_USB(void)
 	PCD_HandleStruct.Init.speed = PCD_SPEED_FULL;
 	PCD_HandleStruct.Init.dma_enable = DISABLE;
 	PCD_HandleStruct.Init.phy_itface = PCD_PHY_EMBEDDED;
-	PCD_HandleStruct.Init.Sof_enable = DISABLE;
+	PCD_HandleStruct.Init.Sof_enable = ENABLE;
 	PCD_HandleStruct.Init.low_power_enable = DISABLE;
 	PCD_HandleStruct.Init.lpm_enable = DISABLE;
 	PCD_HandleStruct.Init.battery_charging_enable = DISABLE;
