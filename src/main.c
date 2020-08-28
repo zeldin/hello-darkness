@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stm32f4xx.h>
+#include <stm32f4xx_ll_rtc.h>
 
 #include "error.h"
 #include "dma.h"
@@ -14,6 +15,35 @@
 
 
 #define BLANKER_DELAY_MS 600000
+
+
+#define GO_TO_DFU_COOKIE 0xdf11f00d
+
+static void EnableRTCWrite(void)
+{
+  __HAL_RCC_PWR_CLK_ENABLE();
+  PWR->CR |= PWR_CR_DBP;
+  while((PWR->CR & PWR_CR_DBP) == RESET)
+    ;
+}
+
+int CheckShouldGoToDFU(void)
+{
+  uint32_t cookie = LL_RTC_BAK_GetRegister(RTC, LL_RTC_BKP_DR17);
+  if (cookie == GO_TO_DFU_COOKIE) {
+    EnableRTCWrite();
+    LL_RTC_BAK_SetRegister(RTC, LL_RTC_BKP_DR17, 0);
+    return 1;
+  }
+  return 0;
+}
+
+void GoToDFU(void)
+{
+  EnableRTCWrite();
+  LL_RTC_BAK_SetRegister(RTC, LL_RTC_BKP_DR17, GO_TO_DFU_COOKIE);
+  HAL_NVIC_SystemReset();
+}
 
 
 /**
@@ -224,6 +254,15 @@ int main()
 	ADC_Start(0);
 	LED_Start();
 	TIM_Start_Encoder();
+
+	HAL_Delay(20);
+	if (KEY_CheckKeyState(KEY_CODE_F12)) {
+	  int id;
+	  for(id=0; id<=LED_ID_MAX; id++)
+	    LED_Set_LED_RGB(id, 0xa0, 0x30, 0x00);
+	  HAL_Delay(1000);
+	  GoToDFU();
+	}
 
 	while (1)
 	{

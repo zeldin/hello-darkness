@@ -1,3 +1,4 @@
+#define KEY_CODE_F12     (0x51u)
 #define KEY_CODE_LIGHT   (0x73u)
 #define KEY_CODE_QBUT    (0x80u)
 #define KEY_CODE_MAX     (0x8du)
