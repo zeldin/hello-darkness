@@ -9,9 +9,11 @@ A functional custom firmware for the DasKeyboard 5Q
   the Q-knob
 * Not typing anything for 10 minutes results in a pause animation
   staring
+* Holding down F12 when plugging in the keyboard puts the keyboard
+  into DFU mode, so that the firmware can be upgraded
 
 # Non-features
 * No host control over LED function (definitiely no cloud!)
 * No color schemes, the keys remain black until you press them or the
   pause animation starts
-* No firmware upgrade function
+
