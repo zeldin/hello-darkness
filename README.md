@@ -18,5 +18,5 @@ A functional custom firmware for the DasKeyboard 5Q
   pause animation starts
 
 # See also
-[5Q-info](https://github.com/diefarbe/5Q-info/tree/master/hello_world) -
+[5Q-info](https://github.com/diefarbe/5Q-info) -
 a collection of reverse engineering information about the 5Q
