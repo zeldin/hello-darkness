@@ -17,3 +17,6 @@ A functional custom firmware for the DasKeyboard 5Q
 * No color schemes, the keys remain black until you press them or the
   pause animation starts
 
+# See also
+[5Q-info](https://github.com/diefarbe/5Q-info/tree/master/hello_world) -
+a collection of reverse engineering information about the 5Q
